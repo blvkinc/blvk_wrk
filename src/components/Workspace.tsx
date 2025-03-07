@@ -202,8 +202,8 @@ export const Workspace: React.FC = () => {
       {showNoteTypes && (
         <div 
           ref={menuRef}
-          className={`fixed minimal-menu rounded-lg p-1.5 z-50 flex flex-col gap-1.5 minimal-border w-36 ${
-            isMobile ? 'bottom-24 left-1/2 -translate-x-1/2' : ''
+          className={`fixed minimal-menu rounded-lg p-1.5 z-[60] flex flex-col gap-1.5 minimal-border ${
+            isMobile ? 'w-[200px] bottom-[1rem] left-1/2 -translate-x-1/2 bg-black/90 backdrop-blur-sm' : 'w-36'
           }`}
           style={!isMobile ? {
             left: `${noteTypePosition.x + 50}px`,
