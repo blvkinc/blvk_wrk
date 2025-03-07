@@ -35,10 +35,14 @@ export const Card: React.FC<CardProps> = ({ card }) => {
 
   const handleDoubleClick = () => {
     setIsEditing(true);
+    if (card.content === 'New note...') {
+      setEditedContent('');
+    }
   };
 
   const handleSave = () => {
-    updateCardContent(card.id, editedContent);
+    const finalContent = editedContent.trim() || 'New note...';
+    updateCardContent(card.id, finalContent);
     updateCardTitle(card.id, editedTitle);
     setIsEditing(false);
   };
