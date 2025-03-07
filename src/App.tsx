@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Workspace } from './components/Workspace';
 import { Login } from './components/Login';
+import { AuthCallback } from './components/AuthCallback';
 import { LogOut } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -49,11 +51,16 @@ const AppContent: React.FC = () => {
 
 const App: React.FC = () => {
   return (
-    <DndProvider backend={HTML5Backend}>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </DndProvider>
+    <Router>
+      <DndProvider backend={HTML5Backend}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/auth/callback" element={<AuthCallback />} />
+            <Route path="*" element={<AppContent />} />
+          </Routes>
+        </AuthProvider>
+      </DndProvider>
+    </Router>
   );
 };
 

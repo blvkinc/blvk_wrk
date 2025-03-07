@@ -45,6 +45,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { error } = await supabase.auth.signUp({
       email,
       password,
+      options: {
+        emailRedirectTo: 'https://blvk-wrk.vercel.app/auth/callback',
+      },
     });
     if (error) throw error;
   };
@@ -56,7 +59,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: 'https://blvk-wrk.vercel.app/auth/callback',
     });
     if (error) throw error;
   };
