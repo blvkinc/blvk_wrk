@@ -6,8 +6,9 @@ export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -21,12 +22,26 @@ export const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     try {
       if (isSignUp) {
         await signUp(email, password);
+        setSuccess('Check your email for the confirmation link!');
       } else {
         await signIn(email, password);
       }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccess(null);
+    try {
+      await resetPassword(email);
+      setSuccess('Password reset link sent to your email!');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     }
@@ -56,11 +71,14 @@ export const Login: React.FC = () => {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Password"
               className="minimal-input w-full text-white text-sm sm:text-base"
-              required
+              required={!isSignUp}
             />
           </div>
           {error && (
             <div className="text-red-400 text-xs sm:text-sm">{error}</div>
+          )}
+          {success && (
+            <div className="text-green-400 text-xs sm:text-sm">{success}</div>
           )}
           <button
             type="submit"
@@ -68,13 +86,24 @@ export const Login: React.FC = () => {
           >
             {isSignUp ? 'Sign Up' : 'Sign In'}
           </button>
-          <button
-            type="button"
-            onClick={() => setIsSignUp(!isSignUp)}
-            className="text-white text-xs sm:text-sm hover:underline"
-          >
-            {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
-          </button>
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-white text-xs sm:text-sm hover:underline"
+            >
+              {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
+            </button>
+            {!isSignUp && (
+              <button
+                type="button"
+                onClick={handleResetPassword}
+                className="text-white text-xs sm:text-sm hover:underline"
+              >
+                Forgot password?
+              </button>
+            )}
+          </div>
         </form>
       </div>
     </div>
