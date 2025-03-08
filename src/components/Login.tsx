@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export const Login: React.FC = () => {
@@ -8,7 +9,8 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkMobile = () => {
@@ -29,6 +31,7 @@ export const Login: React.FC = () => {
         setSuccess('Check your email for the confirmation link!');
       } else {
         await signIn(email, password);
+        navigate('/');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

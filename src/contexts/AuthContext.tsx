@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 
 interface AuthContextType {
   user: User | null;
@@ -28,14 +29,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
-
-      if (event === 'SIGNED_IN') {
-        // Handle successful sign in
-        window.location.href = '/';
-      } else if (event === 'SIGNED_OUT') {
-        // Handle sign out
-        window.location.href = '/';
-      }
     });
 
     return () => subscription.unsubscribe();

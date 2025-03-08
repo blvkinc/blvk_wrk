@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { Workspace } from './components/Workspace';
 import { Login } from './components/Login';
@@ -30,6 +30,7 @@ const EmailConfirmation: React.FC = () => {
 
 const AppContent: React.FC = () => {
   const { user, loading, signOut } = useAuth();
+  const navigate = useNavigate();
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -40,6 +41,15 @@ const AppContent: React.FC = () => {
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -57,7 +67,7 @@ const AppContent: React.FC = () => {
     <div className="relative min-h-screen bg-black">
       <div className={`fixed ${isMobile ? 'bottom-4 right-4' : 'top-4 right-4'} flex items-center gap-2 z-50`}>
         <button
-          onClick={signOut}
+          onClick={handleSignOut}
           className="p-2 minimal-button rounded-lg hover:bg-red-500/20 transition-colors"
           title="Sign Out"
         >
