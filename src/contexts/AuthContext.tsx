@@ -25,9 +25,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     // Listen for changes on auth state (logged in, signed out, etc.)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setUser(session?.user ?? null);
       setLoading(false);
+
+      if (event === 'SIGNED_IN') {
+        // Handle successful sign in
+        window.location.href = '/';
+      } else if (event === 'SIGNED_OUT') {
+        // Handle sign out
+        window.location.href = '/';
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -46,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       password,
       options: {
-        emailRedirectTo: 'https://blvk-wrk.vercel.app/auth/callback',
+        emailRedirectTo: `${window.location.origin}/email-confirmation`,
       },
     });
     if (error) throw error;
@@ -59,7 +67,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const resetPassword = async (email: string) => {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: 'https://blvk-wrk.vercel.app/auth/callback',
+      redirectTo: `${window.location.origin}/email-confirmation`,
     });
     if (error) throw error;
   };
