@@ -9,7 +9,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, resetPassword } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -53,6 +53,7 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <div className="minimal-border rounded-lg p-6 sm:p-8 w-full max-w-sm bg-black/80 backdrop-blur-sm">
+        <h1 className="text-3xl sm:text-4xl font-bold text-white text-center mb-8">BLK-WRK</h1>
         <h2 className="text-xl sm:text-2xl font-bold text-white mb-4 sm:mb-6">
           {isSignUp ? 'Create Account' : 'Sign In'}
         </h2>
