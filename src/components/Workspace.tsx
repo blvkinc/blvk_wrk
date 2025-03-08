@@ -4,6 +4,10 @@ import { Plus, FileText, ListTodo, MessageSquare, Image } from 'lucide-react';
 import { useWorkspaceStore } from '../store';
 import { Card } from './Card';
 import { CardType, NoteType } from '../types';
+import { DrawingLayer } from './DrawingLayer';
+import { DrawingCard } from './DrawingCard';
+
+type Tool = 'pen' | 'eraser' | null;
 
 export const Workspace: React.FC = () => {
   const { cards, updateCardPosition, addCard, setSelectedCard } = useWorkspaceStore();
@@ -13,6 +17,7 @@ export const Workspace: React.FC = () => {
   const [showNoteTypes, setShowNoteTypes] = useState(false);
   const [noteTypePosition, setNoteTypePosition] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);
+  const [currentTool, setCurrentTool] = useState<Tool>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -160,6 +165,7 @@ export const Workspace: React.FC = () => {
       onTouchStart={handleTouchStart}
       className="relative w-full h-screen overflow-hidden touch-none"
     >
+      <DrawingLayer onToolChange={setCurrentTool} />
       <div 
         ref={containerRef}
         className="absolute inset-0"
@@ -178,28 +184,37 @@ export const Workspace: React.FC = () => {
           }}
         />
         <div className="absolute inset-0">
-          {cards.map((card) => (
-            <Card key={card.id} card={card} />
-          ))}
+          {cards.map((card) => {
+            if (card.type === 'drawing') {
+              return <DrawingCard key={card.id} card={card} />;
+            }
+            return <Card key={card.id} card={card} />;
+          })}
         </div>
       </div>
       <div className={`fixed ${isMobile ? 'bottom-4 left-4 right-4' : 'left-4 top-4'} flex ${isMobile ? 'flex-row justify-center' : 'flex-col'} gap-2 z-50`}>
         <button
           onClick={handleNoteButtonClick}
-          className="p-2.5 minimal-button rounded-lg transition-colors hover:bg-white/10"
+          className={`p-2.5 minimal-button rounded-lg transition-colors ${
+            currentTool ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+          }`}
           title="Add Note (Click for options)"
+          disabled={currentTool !== null}
         >
           <Plus className="w-5 h-5 text-white" />
         </button>
         <button
           onClick={handleAddImage}
-          className="p-2.5 minimal-button rounded-lg transition-colors hover:bg-white/10"
+          className={`p-2.5 minimal-button rounded-lg transition-colors ${
+            currentTool ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+          }`}
           title="Add Image"
+          disabled={currentTool !== null}
         >
           <Image className="w-5 h-5 text-white" />
         </button>
       </div>
-      {showNoteTypes && (
+      {showNoteTypes && !currentTool && (
         <div 
           ref={menuRef}
           className={`fixed minimal-menu rounded-lg p-1.5 z-[60] flex flex-col gap-1.5 minimal-border ${

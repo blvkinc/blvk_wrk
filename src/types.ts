@@ -9,12 +9,23 @@ export interface TodoItem {
 export interface Comment {
   id: string;
   text: string;
-  timestamp?: Date;
+  timestamp?: number;
+}
+
+export interface Point {
+  x: number;
+  y: number;
+}
+
+export interface DrawingPath {
+  points: Point[];
+  type: 'pen' | 'eraser';
+  width: number;
 }
 
 export interface CardType {
   id: string;
-  type: 'note' | 'image';
+  type: 'note' | 'image' | 'drawing';
   title: string;
   content: string;
   position: {
@@ -25,6 +36,9 @@ export interface CardType {
   noteType?: NoteType;
   todoItems?: TodoItem[];
   comments?: Comment[];
+  paths?: DrawingPath[];
+  width?: number;
+  height?: number;
 }
 
 export interface Connection {

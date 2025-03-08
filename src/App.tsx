@@ -65,7 +65,7 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="relative min-h-screen bg-black">
-      <div className={`fixed ${isMobile ? 'bottom-4 right-4' : 'top-4 right-4'} flex items-center gap-2 z-50`}>
+      <div className="fixed bottom-4 right-4 flex items-center gap-2 z-50">
         <button
           onClick={handleSignOut}
           className="p-2 minimal-button rounded-lg hover:bg-red-500/20 transition-colors"
