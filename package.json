@@ -1,13 +1,59 @@
 {
-  "name": "vite-react-typescript-starter",
+  "name": "blk-wrk",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "main": "dist-electron/main.cjs",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "build": "tsc && vite build",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "preview": "vite preview",
+    "electron:dev": "tsc -p electron/tsconfig.json && cross-env NODE_ENV=development electron .",
+    "electron:build": "npm run build && tsc -p electron/tsconfig.json && electron-builder",
+    "electron:preview": "npm run build && tsc -p electron/tsconfig.json && cross-env NODE_ENV=production electron ."
+  },
+  "build": {
+    "appId": "com.blkwrk.app",
+    "productName": "BLK-WRK",
+    "copyright": "Copyright © 2024",
+    "directories": {
+      "output": "release",
+      "buildResources": "electron/resources"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "electron/resources/icon.icns"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "electron/resources/icon.ico"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "electron/resources/icon.png",
+      "category": "Productivity"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
@@ -20,11 +66,16 @@
     "zustand": "^4.5.2"
   },
   "devDependencies": {
+    "@electron/asar": "^3.3.1",
     "@eslint/js": "^9.9.1",
+    "@types/node": "^20.17.24",
     "@types/react": "^18.3.5",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",
     "autoprefixer": "^10.4.18",
+    "cross-env": "^7.0.3",
+    "electron": "^35.0.1",
+    "electron-builder": "^25.1.8",
     "eslint": "^9.9.1",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.11",
