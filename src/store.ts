@@ -22,7 +22,7 @@ export interface WorkspaceState {
   saveWorkspaceToCloud: (userId: string) => Promise<void>;
   loadWorkspaceFromCloud: (userId: string) => Promise<void>;
   syncWorkspace: (userId: string) => Promise<void>;
-  mergeWorkspaces: (cloudCards: CardType[]) => void;
+  mergeWorkspaces: (cloudCards: CardType[], preferCloudData?: boolean) => void;
 }
 
 // Load initial cards from localStorage
@@ -195,18 +195,23 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         .eq('user_id', userId)
         .single();
       
-      if (error) {
+      if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
         throw error;
       }
       
       if (workspace && workspace.cards_data) {
         const cloudCards = workspace.cards_data as CardType[];
+        
+        // Always use cloud data when explicitly loading from cloud
         saveCards(cloudCards);
         set({ 
           cards: cloudCards,
           isCloudSaved: true,
           lastSyncedAt: new Date(workspace.updated_at)
         });
+      } else {
+        // No cloud data found, but we've checked
+        set({ isCloudSaved: true, lastSyncedAt: new Date() });
       }
     } catch (error) {
       console.error('Error loading workspace from cloud:', error);
@@ -231,9 +236,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       }
       
       if (workspace && workspace.cards_data) {
-        // We have cloud data, perform merge
+        // We have cloud data, perform merge with preference to cloud data
         const cloudCards = workspace.cards_data as CardType[];
-        get().mergeWorkspaces(cloudCards);
+        get().mergeWorkspaces(cloudCards, true);
       } else {
         // No cloud data, just save current state to cloud
         await get().saveWorkspaceToCloud(userId);
@@ -245,7 +250,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  mergeWorkspaces: (cloudCards) => {
+  mergeWorkspaces: (cloudCards, preferCloudData = false) => {
     const localCards = get().cards;
     
     // Create maps for easier lookup
@@ -255,25 +260,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     // Create merged cards array
     const mergedCards: CardType[] = [];
     
-    // Add all local cards
-    for (const [id, localCard] of localCardsMap.entries()) {
-      const cloudCard = cloudCardsMap.get(id);
+    // Add all cloud cards first if we prefer cloud data
+    if (preferCloudData) {
+      for (const [id, cloudCard] of cloudCardsMap.entries()) {
+        mergedCards.push(cloudCard);
+      }
       
-      if (cloudCard) {
-        // Card exists in both - take the more recent version
-        // In a real implementation, you might want a more sophisticated merge strategy
-        // or timestamp tracking for each card
-        mergedCards.push(localCard);
-      } else {
-        // Card only exists locally
+      // Add local cards that don't exist in cloud
+      for (const [id, localCard] of localCardsMap.entries()) {
+        if (!cloudCardsMap.has(id)) {
+          mergedCards.push(localCard);
+        }
+      }
+    } else {
+      // Original merge logic - prefer local data
+      // Add all local cards
+      for (const [id, localCard] of localCardsMap.entries()) {
         mergedCards.push(localCard);
       }
-    }
-    
-    // Add cloud-only cards
-    for (const [id, cloudCard] of cloudCardsMap.entries()) {
-      if (!localCardsMap.has(id)) {
-        mergedCards.push(cloudCard);
+      
+      // Add cloud-only cards
+      for (const [id, cloudCard] of cloudCardsMap.entries()) {
+        if (!localCardsMap.has(id)) {
+          mergedCards.push(cloudCard);
+        }
       }
     }
     
@@ -285,11 +295,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       lastSyncedAt: new Date()
     });
     
-    // Save the merged workspace back to the cloud
-    const userId = supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        get().saveWorkspaceToCloud(data.user.id);
-      }
-    });
+    // Save the merged workspace back to the cloud if we preferred local data
+    if (!preferCloudData) {
+      supabase.auth.getUser().then(({ data }) => {
+        if (data.user) {
+          get().saveWorkspaceToCloud(data.user.id);
+        }
+      });
+    }
   }
 }));

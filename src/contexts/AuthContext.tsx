@@ -38,9 +38,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       
-      // Auto-sync workspace when user logs in
+      // Load workspace from cloud when user logs in
       if (currentUser) {
-        syncWorkspaceStore(currentUser.id).catch(console.error);
+        loadWorkspaceFromCloud(currentUser.id).catch(console.error);
       }
       
       setLoading(false);
@@ -51,16 +51,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       
-      // Auto-sync workspace when user logs in
+      // Load workspace from cloud when user logs in
       if (event === 'SIGNED_IN' && currentUser) {
-        syncWorkspaceStore(currentUser.id).catch(console.error);
+        loadWorkspaceFromCloud(currentUser.id).catch(console.error);
       }
       
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, [syncWorkspaceStore]);
+  }, [loadWorkspaceFromCloud]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -110,7 +110,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     
     setIsSyncing(true);
     try {
-      await syncWorkspaceStore(user.id);
+      await loadWorkspaceFromCloud(user.id);
     } finally {
       setIsSyncing(false);
     }
@@ -120,12 +120,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!user) return;
     
+    // Initial sync after login
+    loadWorkspaceFromCloud(user.id).catch(console.error);
+    
     const syncInterval = setInterval(() => {
-      syncWorkspaceStore(user.id).catch(console.error);
+      // For periodic syncs, use saveWorkspaceToCloud to push local changes
+      saveWorkspaceToCloud(user.id).catch(console.error);
     }, 5 * 60 * 1000); // Sync every 5 minutes
     
     return () => clearInterval(syncInterval);
-  }, [user, syncWorkspaceStore]);
+  }, [user, loadWorkspaceFromCloud, saveWorkspaceToCloud]);
 
   return (
     <AuthContext.Provider value={{ 
