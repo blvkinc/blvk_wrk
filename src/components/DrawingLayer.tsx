@@ -205,7 +205,7 @@ export const DrawingLayer: React.FC<DrawingLayerProps> = ({ onToolChange }) => {
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
       />
-      <div className="fixed left-4 top-32 flex flex-col gap-2 z-50">
+      <div className="fixed right-4 top-4 flex flex-col gap-2 z-50">
         <button
           onClick={() => setCurrentTool(currentTool === 'pen' ? null : 'pen')}
           className={`p-2.5 minimal-button rounded-lg transition-colors ${

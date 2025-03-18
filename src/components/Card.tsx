@@ -1,6 +1,6 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useDrag } from 'react-dnd';
-import { Image, FileText, Edit2, Check, Trash2, ListTodo, MessageSquare, Plus, Minus, X } from 'lucide-react';
+import { Trash2, ArrowDownRight } from 'lucide-react';
 import { CardType, TodoItem, Comment } from '../types';
 import { useWorkspaceStore } from '../store';
 
@@ -9,310 +9,126 @@ interface CardProps {
 }
 
 export const Card: React.FC<CardProps> = ({ card }) => {
+  const { deleteCard, updateCard, updateCardContent } = useWorkspaceStore();
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(card.content);
+  const [isEditingContent, setIsEditingContent] = useState(false);
   const [editedTitle, setEditedTitle] = useState(card.title);
-  const [newTodo, setNewTodo] = useState('');
-  const [newComment, setNewComment] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [editedContent, setEditedContent] = useState(card.content);
+  const [isResizing, setIsResizing] = useState(false);
+  const [cardSize, setCardSize] = useState({
+    width: card.width || 300,
+    height: card.height || 'auto'
+  });
+  const [startResize, setStartResize] = useState({ x: 0, y: 0 });
+  const [startSize, setStartSize] = useState({ width: 0, height: 0 });
   const titleRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const { updateCardPosition, updateCardContent, updateCardTitle, updateTodoItems, addComment, deleteCard, setSelectedCard } = useWorkspaceStore();
-
+  const contentRef = useRef<HTMLTextAreaElement>(null);
+  
   const [{ isDragging }, drag] = useDrag(() => ({
     type: 'card',
     item: { id: card.id, currentPosition: card.position },
     collect: (monitor) => ({
       isDragging: monitor.isDragging(),
     }),
-  }), [card.id, card.position]);
+    canDrag: !isResizing && !isEditingContent,
+  }), [card.id, card.position, isResizing, isEditingContent]);
 
   useEffect(() => {
-    if (isEditing && textareaRef.current) {
-      textareaRef.current.focus();
+    if (isEditing && titleRef.current) {
+      titleRef.current.focus();
     }
   }, [isEditing]);
 
-  const handleDoubleClick = () => {
-    setIsEditing(true);
-    if (card.content === 'New note...') {
-      setEditedContent('');
+  useEffect(() => {
+    if (isEditingContent && contentRef.current) {
+      contentRef.current.focus();
+      
+      // Put cursor at the end of the text
+      const length = contentRef.current.value.length;
+      contentRef.current.setSelectionRange(length, length);
     }
-  };
+  }, [isEditingContent]);
 
-  const handleSave = () => {
-    const finalContent = editedContent.trim() || 'New note...';
-    updateCardContent(card.id, finalContent);
-    updateCardTitle(card.id, editedTitle);
-    setIsEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditedContent(card.content);
-    setEditedTitle(card.title);
-    setIsEditing(false);
-  };
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizing) return;
+      
+      const deltaX = e.clientX - startResize.x;
+      const deltaY = e.clientY - startResize.y;
+      
+      const newWidth = Math.max(200, startSize.width + deltaX);
+      const newHeight = typeof startSize.height === 'number' 
+        ? Math.max(100, startSize.height + deltaY)
+        : 100;
+      
+      setCardSize({
+        width: newWidth,
+        height: newHeight
+      });
+    };
+    
+    const handleMouseUp = () => {
+      if (isResizing) {
+        updateCard({
+          ...card,
+          width: cardSize.width,
+          height: typeof cardSize.height === 'number' ? cardSize.height : 300
+        });
+        setIsResizing(false);
+      }
+    };
+    
+    if (isResizing) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, startResize, startSize, cardSize, card, updateCard]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSave();
+      handleTitleSave();
     } else if (e.key === 'Escape') {
-      handleCancel();
+      setIsEditing(false);
+      setEditedTitle(card.title);
     }
   };
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (isEditing && !(e.target as Element)?.closest('.card-container')) {
-        handleSave();
-      }
-    };
-
-    if (isEditing) {
-      document.addEventListener('mousedown', handleClickOutside);
-    }
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [isEditing]);
-
-  const handleAddTodo = () => {
-    if (newTodo.trim() && card.todoItems) {
-      const newTodoItem = { id: Math.random().toString(36).substr(2, 9), text: newTodo, completed: false };
-      updateTodoItems(card.id, [...card.todoItems, newTodoItem]);
-      setNewTodo('');
+  const handleContentKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      handleContentSave();
     }
   };
 
-  const handleToggleTodo = (todoId: string) => {
-    if (card.todoItems) {
-      const updatedTodos = card.todoItems.map(todo =>
-        todo.id === todoId ? { ...todo, completed: !todo.completed } : todo
-      );
-      updateTodoItems(card.id, updatedTodos);
+  const handleTitleSave = () => {
+    if (editedTitle.trim() !== '') {
+      updateCard({
+        ...card,
+        title: editedTitle.trim()
+      });
     }
+    setIsEditing(false);
   };
 
-  const handleDeleteTodo = (todoId: string) => {
-    const updatedTodos = card.todoItems?.filter(todo => todo.id !== todoId);
-    updateTodoItems(card.id, updatedTodos || []);
+  const handleContentSave = () => {
+    updateCardContent(card.id, editedContent);
+    setIsEditingContent(false);
   };
 
-  const handleAddComment = () => {
-    if (newComment.trim() && card.comments) {
-      const newCommentItem = { id: Math.random().toString(36).substr(2, 9), text: newComment };
-      addComment(card.id, [...card.comments, newCommentItem]);
-      setNewComment('');
-    }
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          updateCardContent(card.id, event.target.result as string);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleImageClick = (e: React.MouseEvent) => {
+  const handleResizeStart = (e: React.MouseEvent) => {
     e.stopPropagation();
-    fileInputRef.current?.click();
-  };
-
-  const renderNoteContent = () => {
-    if (card.type === 'image') {
-      return (
-        <>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-            accept="image/*"
-            className="hidden"
-          />
-          <img
-            src={card.content}
-            alt={card.title}
-            className="w-full h-32 object-cover rounded cursor-pointer"
-            onClick={handleImageClick}
-          />
-        </>
-      );
-    }
-
-    switch (card.noteType) {
-      case 'todo':
-        return isEditing ? (
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={newTodo}
-                onChange={(e) => setNewTodo(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
-                placeholder="Add new todo..."
-                className="minimal-input flex-1 text-white"
-              />
-              <button
-                onClick={handleAddTodo}
-                className="p-1 minimal-button rounded"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-            <div className="space-y-1">
-              {card.todoItems?.map((todo) => (
-                <div key={todo.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onChange={() => handleToggleTodo(todo.id)}
-                    className="minimal-input"
-                  />
-                  <span className={`text-white ${todo.completed ? 'line-through' : ''}`}>
-                    {todo.text}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteTodo(todo.id);
-                    }}
-                    className="p-1 hover:bg-gray-700 rounded"
-                  >
-                    <Minus className="w-4 h-4 text-red-400" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={newTodo}
-                onChange={(e) => setNewTodo(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddTodo()}
-                placeholder="Add new todo..."
-                className="minimal-input flex-1 text-white"
-              />
-              <button
-                onClick={handleAddTodo}
-                className="p-1 minimal-button rounded"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-            <div className="space-y-1">
-              {card.todoItems?.map((todo) => (
-                <div key={todo.id} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={todo.completed}
-                    onChange={() => handleToggleTodo(todo.id)}
-                    className="minimal-input"
-                  />
-                  <span className={`text-white ${todo.completed ? 'line-through' : ''}`}>
-                    {todo.text}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
-      case 'comment':
-        return isEditing ? (
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                placeholder="Add new comment..."
-                className="minimal-input flex-1 text-white"
-              />
-              <button
-                onClick={handleAddComment}
-                className="p-1 minimal-button rounded"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {card.comments?.map((comment) => (
-                <div key={comment.id} className="flex items-center gap-2 text-white">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>{comment.text}</span>
-                  {comment.timestamp && (
-                    <span className="text-xs text-gray-400">
-                      {new Date(comment.timestamp).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
-                placeholder="Add new comment..."
-                className="minimal-input flex-1 text-white"
-              />
-              <button
-                onClick={handleAddComment}
-                className="p-1 minimal-button rounded"
-              >
-                <Plus className="w-4 h-4 text-white" />
-              </button>
-            </div>
-            <div className="space-y-2">
-              {card.comments?.map((comment) => (
-                <div key={comment.id} className="flex items-center gap-2 text-white">
-                  <MessageSquare className="w-4 h-4" />
-                  <span>{comment.text}</span>
-                  {comment.timestamp && (
-                    <span className="text-xs text-gray-400">
-                      {new Date(comment.timestamp).toLocaleString()}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-
-      default:
-        return isEditing ? (
-          <div className="card-content">
-            <textarea
-              ref={textareaRef}
-              value={editedContent}
-              onChange={(e) => setEditedContent(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="minimal-input w-full h-32 text-white"
-              onClick={(e) => e.stopPropagation()}
-            />
-          </div>
-        ) : (
-          <div onDoubleClick={handleDoubleClick} className="text-white whitespace-pre-wrap">
-            {card.content}
-          </div>
-        );
-    }
+    e.preventDefault();
+    
+    setIsResizing(true);
+    setStartResize({ x: e.clientX, y: e.clientY });
+    setStartSize({ 
+      width: cardSize.width, 
+      height: typeof cardSize.height === 'string' ? 0 : cardSize.height 
+    });
   };
 
   return (
@@ -325,8 +141,19 @@ export const Card: React.FC<CardProps> = ({ card }) => {
         transform: 'translate(-50%, -50%)',
       }}
     >
-      <div className="minimal-border rounded-lg p-4 w-64 bg-black/80 backdrop-blur-sm">
-        <div className="flex justify-between items-center mb-2">
+      <div 
+        className="minimal-border rounded-lg p-4 bg-black/80 backdrop-blur-sm flex flex-col"
+        style={{ 
+          width: cardSize.width,
+          height: cardSize.height !== 'auto' ? cardSize.height : undefined,
+          minHeight: '80px',
+          maxHeight: typeof cardSize.height === 'number' ? cardSize.height : undefined,
+          resize: 'none',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        <div className="flex justify-between items-center mb-2 flex-shrink-0">
           {isEditing ? (
             <input
               ref={titleRef}
@@ -334,16 +161,18 @@ export const Card: React.FC<CardProps> = ({ card }) => {
               value={editedTitle}
               onChange={(e) => setEditedTitle(e.target.value)}
               onKeyDown={handleKeyDown}
+              onBlur={handleTitleSave}
               className="minimal-input w-full mr-2 text-white"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
             <h3 
-              className="text-white font-medium cursor-text"
+              className="text-white font-medium cursor-text truncate max-w-[calc(100%-30px)]"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsEditing(true);
               }}
+              title={card.title}
             >
               {card.title}
             </h3>
@@ -353,38 +182,63 @@ export const Card: React.FC<CardProps> = ({ card }) => {
               e.stopPropagation();
               deleteCard(card.id);
             }}
-            className="p-1 minimal-button rounded hover:bg-red-500/20"
+            className="p-1 minimal-button rounded hover:bg-red-500/20 flex-shrink-0"
           >
             <Trash2 className="w-4 h-4 text-red-400" />
           </button>
         </div>
-        {isEditing ? (
-          <div className="space-y-2">
-            {renderNoteContent()}
-            <div className="flex justify-end gap-2">
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCancel();
-                }}
-                className="p-1 minimal-button rounded"
-              >
-                <X className="w-4 h-4 text-white" />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSave();
-                }}
-                className="p-1 minimal-button rounded"
-              >
-                <Check className="w-4 h-4 text-white" />
-              </button>
-            </div>
-          </div>
+
+        {isEditingContent ? (
+          <textarea
+            ref={contentRef}
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            onKeyDown={handleContentKeyDown}
+            onBlur={handleContentSave}
+            className="minimal-input text-white text-sm w-full h-full resize-none flex-grow"
+            style={{
+              background: 'transparent', 
+              border: 'none',
+              outline: 'none',
+              color: 'white',
+              minHeight: '60px',
+              maxHeight: typeof cardSize.height === 'number' ? 
+                `${cardSize.height - 70}px` : '400px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+            placeholder="Type your note here..."
+          />
         ) : (
-          renderNoteContent()
+          <div 
+            className="text-white text-sm whitespace-pre-wrap overflow-y-auto flex-grow cursor-text"
+            style={{ 
+              maxHeight: typeof cardSize.height === 'number' ? 
+                `${cardSize.height - 70}px` : '400px',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              wordBreak: 'break-word',
+              msOverflowStyle: 'none',
+              scrollbarWidth: 'thin',
+              paddingRight: '3px'
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsEditingContent(true);
+              setEditedContent(card.content);
+            }}
+          >
+            {card.content || <span className="text-white/50">Click to add content</span>}
+          </div>
         )}
+        
+        {/* Resize Handle */}
+        <div 
+          className="absolute bottom-1 right-1 cursor-nwse-resize opacity-30 hover:opacity-100 transition-opacity"
+          onMouseDown={handleResizeStart}
+          title="Resize"
+        >
+          <ArrowDownRight className="w-4 h-4 text-white" />
+        </div>
       </div>
     </div>
   );

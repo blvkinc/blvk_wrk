@@ -1,25 +1,29 @@
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import { useDrop } from 'react-dnd';
-import { Plus, FileText, ListTodo, MessageSquare, Image } from 'lucide-react';
+import { Plus, FileText, ListTodo, MessageSquare, Image, Layout, Globe, File, Move, Trash2 } from 'lucide-react';
 import { useWorkspaceStore } from '../store';
 import { Card } from './Card';
 import { CardType, NoteType } from '../types';
 import { DrawingLayer } from './DrawingLayer';
 import { DrawingCard } from './DrawingCard';
-
-type Tool = 'pen' | 'eraser' | null;
+import { KanbanCard } from './KanbanCard';
+import { IframeCard } from './IframeCard';
+import { MediaCard } from './MediaCard';
+import { nanoid } from 'nanoid';
 
 export const Workspace: React.FC = () => {
-  const { cards, updateCardPosition, addCard, setSelectedCard } = useWorkspaceStore();
+  const { cards, updateCardPosition, addCard, setSelectedCard, clearWorkspace } = useWorkspaceStore();
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [showNoteTypes, setShowNoteTypes] = useState(false);
   const [noteTypePosition, setNoteTypePosition] = useState({ x: 0, y: 0 });
   const [isMobile, setIsMobile] = useState(false);
-  const [currentTool, setCurrentTool] = useState<Tool>(null);
+  const [currentTool, setCurrentTool] = useState<'pen' | 'eraser' | null>(null);
+  const [showHelp, setShowHelp] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [showClearModal, setShowClearModal] = useState(false);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -28,6 +32,13 @@ export const Workspace: React.FC = () => {
     checkMobile();
     window.addEventListener('resize', checkMobile);
     return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowHelp(false);
+    }, 10000);
+    return () => clearTimeout(timer);
   }, []);
 
   const [, drop] = useDrop(() => ({
@@ -51,56 +62,26 @@ export const Workspace: React.FC = () => {
     setShowNoteTypes(false);
   }, [setSelectedCard]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 1 || isMobile) { // Middle mouse button or touch
-      e.preventDefault();
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - position.x,
-        y: e.clientY - position.y
-      });
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent) => {
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    // Only use middle mouse button (button 1) for dragging the workspace
+    if (currentTool || e.button !== 1) return;
+    
+    // Prevent default behavior like autoscroll with middle mouse
     e.preventDefault();
+    
     setIsDragging(true);
-    const touch = e.touches[0];
     setDragStart({
-      x: touch.clientX - position.x,
-      y: touch.clientY - position.y
+      x: e.clientX - position.x,
+      y: e.clientY - position.y
     });
-  };
-
-  const handleTouchMove = (e: TouchEvent) => {
-    if (isDragging) {
-      const touch = e.touches[0];
-      const newX = touch.clientX - dragStart.x;
-      const newY = touch.clientY - dragStart.y;
-      
-      const maxOffset = window.innerWidth * 1.5;
-      const minOffset = -maxOffset;
-      
-      const constrainedX = Math.max(minOffset, Math.min(maxOffset, newX));
-      const constrainedY = Math.max(minOffset, Math.min(maxOffset, newY));
-      
-      setPosition({ x: constrainedX, y: constrainedY });
-    }
-  };
+  }, [currentTool, position.x, position.y]);
 
   const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (isDragging) {
-      const newX = e.clientX - dragStart.x;
-      const newY = e.clientY - dragStart.y;
-      
-      const maxOffset = window.innerWidth * 1.5;
-      const minOffset = -maxOffset;
-      
-      const constrainedX = Math.max(minOffset, Math.min(maxOffset, newX));
-      const constrainedY = Math.max(minOffset, Math.min(maxOffset, newY));
-      
-      setPosition({ x: constrainedX, y: constrainedY });
-    }
+    if (!isDragging) return;
+    
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+    setPosition({ x: newX, y: newY });
   }, [isDragging, dragStart]);
 
   const handleMouseUp = useCallback(() => {
@@ -111,50 +92,207 @@ export const Workspace: React.FC = () => {
     if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove);
-      window.addEventListener('touchend', handleMouseUp);
+    } else {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     }
+    
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleMouseUp);
     };
   }, [isDragging, handleMouseMove, handleMouseUp]);
 
-  const handleAddNote = useCallback((noteType: NoteType) => {
-    const newCard: CardType = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: 'note',
-      title: 'New Note',
-      content: noteType === 'todo' ? '' : 'New note...',
-      position: { x: Math.random() * 200 + 100, y: Math.random() * 200 + 100 },
-      connections: [],
-      noteType,
-      todoItems: noteType === 'todo' ? [] : undefined,
-      comments: noteType === 'comment' ? [] : undefined,
-    };
-    addCard(newCard);
-    setShowNoteTypes(false);
-  }, [addCard]);
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (currentTool) return;
+    
+    // Use two-finger gesture for workspace panning
+    if (e.touches.length === 2) {
+      e.preventDefault();
+      
+      // Calculate the midpoint of the two touches
+      const touch1 = e.touches[0];
+      const touch2 = e.touches[1];
+      const midX = (touch1.clientX + touch2.clientX) / 2;
+      const midY = (touch1.clientY + touch2.clientY) / 2;
+      
+      setIsDragging(true);
+      setDragStart({
+        x: midX - position.x,
+        y: midY - position.y
+      });
+    }
+  }, [currentTool, position.x, position.y]);
 
-  const handleAddImage = useCallback(() => {
-    const newCard: CardType = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: 'image',
-      title: 'Image',
-      content: 'https://source.unsplash.com/random/800x600',
-      position: { x: Math.random() * 200 + 400, y: Math.random() * 200 + 100 },
-      connections: [],
+  const handleTouchMove = useCallback((e: TouchEvent) => {
+    if (!isDragging || e.touches.length !== 2) return;
+    
+    // Calculate the midpoint of the two touches
+    const touch1 = e.touches[0];
+    const touch2 = e.touches[1];
+    const midX = (touch1.clientX + touch2.clientX) / 2;
+    const midY = (touch1.clientY + touch2.clientY) / 2;
+    
+    const newX = midX - dragStart.x;
+    const newY = midY - dragStart.y;
+    setPosition({ x: newX, y: newY });
+  }, [isDragging, dragStart]);
+
+  const handleTouchEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('touchmove', handleTouchMove, { passive: false });
+      window.addEventListener('touchend', handleTouchEnd);
+    } else {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
+    }
+    
+    return () => {
+      window.removeEventListener('touchmove', handleTouchMove);
+      window.removeEventListener('touchend', handleTouchEnd);
     };
-    addCard(newCard);
-  }, [addCard]);
+  }, [isDragging, handleTouchMove, handleTouchEnd]);
 
   const handleNoteButtonClick = (e: React.MouseEvent) => {
-    e.preventDefault();
     e.stopPropagation();
-    setNoteTypePosition({ x: e.clientX, y: e.clientY });
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    setNoteTypePosition({
+      x: rect.left,
+      y: rect.bottom
+    });
     setShowNoteTypes(!showNoteTypes);
+  };
+
+  const handleAddNote = (type: NoteType) => {
+    const centerX = window.innerWidth / 2 - position.x;
+    const centerY = window.innerHeight / 2 - position.y;
+    
+    const newNote: CardType = {
+      id: nanoid(),
+      type,
+      title: getDefaultTitle(type),
+      content: '',
+      position: { x: centerX, y: centerY },
+      connections: []
+    };
+    
+    addCard(newNote);
+    setShowNoteTypes(false);
+  };
+
+  const getDefaultTitle = (type: NoteType): string => {
+    switch (type) {
+      case 'text': return 'Text Note';
+      case 'todo': return 'Todo List';
+      case 'chat': return 'Chat';
+      case 'kanban': return 'Kanban Board';
+      case 'iframe': return 'Web Page';
+      case 'image': return 'Image';
+      default: return 'Note';
+    }
+  };
+
+  const handleAddImage = () => {
+    // Create a file input to select an image
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = (e) => {
+      const target = e.target as HTMLInputElement;
+      if (!target.files || target.files.length === 0) return;
+      
+      const file = target.files[0];
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        if (!event.target?.result) return;
+        
+        const centerX = window.innerWidth / 2 - position.x;
+        const centerY = window.innerHeight / 2 - position.y;
+        
+        const newImageCard: CardType = {
+          id: nanoid(),
+          type: 'image',
+          title: file.name,
+          content: event.target.result as string,
+          position: { x: centerX, y: centerY },
+          connections: []
+        };
+        
+        addCard(newImageCard);
+      };
+      
+      reader.readAsDataURL(file);
+    };
+    
+    input.click();
+  };
+
+  const handleAddMedia = () => {
+    const centerX = window.innerWidth / 2 - position.x;
+    const centerY = window.innerHeight / 2 - position.y;
+    
+    const newMediaCard: CardType = {
+      id: nanoid(),
+      type: 'media',
+      title: 'Media Files',
+      content: '',
+      position: { x: centerX, y: centerY },
+      connections: [],
+      files: []
+    };
+    
+    addCard(newMediaCard);
+  };
+
+  const handleAddWebPage = () => {
+    const centerX = window.innerWidth / 2 - position.x;
+    const centerY = window.innerHeight / 2 - position.y;
+    
+    const newIframeCard: CardType = {
+      id: nanoid(),
+      type: 'iframe',
+      title: 'Web Page',
+      content: '',
+      position: { x: centerX, y: centerY },
+      connections: [],
+      url: ''
+    };
+    
+    addCard(newIframeCard);
+  };
+
+  const handleClearWorkspace = () => {
+    setShowClearModal(true);
+  };
+
+  const confirmClearWorkspace = () => {
+    clearWorkspace();
+    setShowClearModal(false);
+  };
+
+  const cancelClearWorkspace = () => {
+    setShowClearModal(false);
+  };
+
+  const renderCard = (card: CardType) => {
+    switch (card.type) {
+      case 'drawing':
+        return <DrawingCard key={card.id} card={card} />;
+      case 'kanban':
+        return <KanbanCard key={card.id} card={card} />;
+      case 'iframe':
+        return <IframeCard key={card.id} card={card} />;
+      case 'media':
+        return <MediaCard key={card.id} card={card} />;
+      default:
+        return <Card key={card.id} card={card} />;
+    }
   };
 
   return (
@@ -163,7 +301,8 @@ export const Workspace: React.FC = () => {
       onClick={handleWorkspaceClick}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
-      className="relative w-full h-screen overflow-hidden touch-none"
+      className={`relative w-full h-screen overflow-hidden ${isDragging ? 'cursor-move' : 'cursor-default'}`}
+      title="Use middle mouse button to pan the workspace"
     >
       <DrawingLayer onToolChange={setCurrentTool} />
       <div 
@@ -172,8 +311,7 @@ export const Workspace: React.FC = () => {
         style={{
           transform: `translate(${position.x}px, ${position.y}px)`,
           transition: isDragging ? 'none' : 'transform 0.1s ease-out',
-          willChange: 'transform',
-          touchAction: 'none'
+          willChange: 'transform'
         }}
       >
         <div 
@@ -184,14 +322,27 @@ export const Workspace: React.FC = () => {
           }}
         />
         <div className="absolute inset-0">
-          {cards.map((card) => {
-            if (card.type === 'drawing') {
-              return <DrawingCard key={card.id} card={card} />;
-            }
-            return <Card key={card.id} card={card} />;
-          })}
+          {cards.map(renderCard)}
         </div>
       </div>
+      
+      {showHelp && (
+        <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-black/80 backdrop-blur-sm px-4 py-2 rounded-lg minimal-border z-50 flex items-center gap-2 max-w-[300px]">
+          <Move className="w-5 h-5 text-white" />
+          <p className="text-xs text-white">
+            {isMobile 
+              ? "Use two fingers to pan the workspace" 
+              : "Use middle mouse button to pan the workspace"}
+          </p>
+          <button 
+            className="text-white/70 text-xs hover:text-white"
+            onClick={() => setShowHelp(false)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+      
       <div className={`fixed ${isMobile ? 'bottom-4 left-4 right-4' : 'left-4 top-4'} flex ${isMobile ? 'flex-row justify-center' : 'flex-col'} gap-2 z-50`}>
         <button
           onClick={handleNoteButtonClick}
@@ -213,6 +364,36 @@ export const Workspace: React.FC = () => {
         >
           <Image className="w-5 h-5 text-white" />
         </button>
+        <button
+          onClick={handleAddMedia}
+          className={`p-2.5 minimal-button rounded-lg transition-colors ${
+            currentTool ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+          }`}
+          title="Add Media Files"
+          disabled={currentTool !== null}
+        >
+          <File className="w-5 h-5 text-white" />
+        </button>
+        <button
+          onClick={handleAddWebPage}
+          className={`p-2.5 minimal-button rounded-lg transition-colors ${
+            currentTool ? 'opacity-50 cursor-not-allowed' : 'hover:bg-white/10'
+          }`}
+          title="Add Web Page"
+          disabled={currentTool !== null}
+        >
+          <Globe className="w-5 h-5 text-white" />
+        </button>
+        <button
+          onClick={handleClearWorkspace}
+          className={`p-2.5 minimal-button rounded-lg transition-colors ${
+            currentTool ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-500/20'
+          }`}
+          title="Clear Workspace"
+          disabled={currentTool !== null}
+        >
+          <Trash2 className="w-5 h-5 text-red-400" />
+        </button>
       </div>
       {showNoteTypes && !currentTool && (
         <div 
@@ -227,35 +408,59 @@ export const Workspace: React.FC = () => {
           } : undefined}
         >
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAddNote('normal');
-            }}
-            className="p-2 minimal-button rounded flex items-center gap-2 w-full hover:bg-white/10 transition-colors"
+            onClick={() => handleAddNote('text')}
+            className="minimal-button p-2 rounded flex items-center gap-2 hover:bg-white/5"
           >
             <FileText className="w-4 h-4 text-white" />
-            <span className="text-white text-sm">Normal Note</span>
+            <span className="text-white text-sm">Text Note</span>
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAddNote('todo');
-            }}
-            className="p-2 minimal-button rounded flex items-center gap-2 w-full hover:bg-white/10 transition-colors"
+            onClick={() => handleAddNote('todo')}
+            className="minimal-button p-2 rounded flex items-center gap-2 hover:bg-white/5"
           >
             <ListTodo className="w-4 h-4 text-white" />
             <span className="text-white text-sm">Todo List</span>
           </button>
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAddNote('comment');
-            }}
-            className="p-2 minimal-button rounded flex items-center gap-2 w-full hover:bg-white/10 transition-colors"
+            onClick={() => handleAddNote('chat')}
+            className="minimal-button p-2 rounded flex items-center gap-2 hover:bg-white/5"
           >
             <MessageSquare className="w-4 h-4 text-white" />
-            <span className="text-white text-sm">Comment Note</span>
+            <span className="text-white text-sm">Chat</span>
           </button>
+          <button
+            onClick={() => handleAddNote('kanban')}
+            className="minimal-button p-2 rounded flex items-center gap-2 hover:bg-white/5"
+          >
+            <Layout className="w-4 h-4 text-white" />
+            <span className="text-white text-sm">Kanban Board</span>
+          </button>
+        </div>
+      )}
+      
+      {/* Clear Workspace Confirmation Modal */}
+      {showClearModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[999]">
+          <div className="minimal-border rounded-lg p-6 bg-black/90 max-w-sm">
+            <h3 className="text-white text-lg font-medium mb-4">Clear Workspace</h3>
+            <p className="text-white/80 mb-6">
+              Are you sure you want to clear the workspace? This will delete all cards and cannot be undone.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button 
+                onClick={cancelClearWorkspace}
+                className="minimal-button p-2 px-4 rounded-lg hover:bg-white/10 text-white"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmClearWorkspace}
+                className="minimal-button p-2 px-4 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-400"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

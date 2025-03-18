@@ -1,4 +1,4 @@
-export type NoteType = 'normal' | 'todo' | 'comment';
+export type NoteType = 'text' | 'todo' | 'chat' | 'image' | 'drawing' | 'kanban' | 'iframe' | 'media';
 
 export interface TodoItem {
   id: string;
@@ -23,22 +23,50 @@ export interface DrawingPath {
   width: number;
 }
 
+export interface KanbanColumn {
+  id: string;
+  title: string;
+  tasks: KanbanTask[];
+}
+
+export interface KanbanTask {
+  id: string;
+  content: string;
+  completed: boolean;
+}
+
 export interface CardType {
   id: string;
-  type: 'note' | 'image' | 'drawing';
+  type: NoteType;
   title: string;
   content: string;
-  position: {
-    x: number;
-    y: number;
-  };
+  position: Point;
   connections: string[];
-  noteType?: NoteType;
-  todoItems?: TodoItem[];
-  comments?: Comment[];
+  
+  // For drawings
   paths?: DrawingPath[];
   width?: number;
   height?: number;
+  
+  // For kanban boards
+  columns?: KanbanColumn[];
+  
+  // For iframe/embedded websites
+  url?: string;
+  
+  // For media files
+  files?: {
+    id: string;
+    name: string;
+    type: string;
+    url: string;
+    size: number;
+  }[];
+  
+  // For todo and comment cards
+  todoItems?: TodoItem[];
+  comments?: Comment[];
+  noteType?: NoteType;
 }
 
 export interface Connection {

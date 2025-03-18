@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
-import { useNavigate } from 'react-router-dom';
+import { useWorkspaceStore } from '../store';
 
 interface AuthContextType {
   user: User | null;
@@ -10,6 +10,10 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  syncWorkspace: () => Promise<void>;
+  isSyncing: boolean;
+  isWorkspaceSynced: boolean;
+  lastSyncedAt: Date | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -17,22 +21,46 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const {
+    saveWorkspaceToCloud,
+    loadWorkspaceFromCloud,
+    syncWorkspace: syncWorkspaceStore,
+    isSyncing: isStoreSyncing,
+    isCloudSaved,
+    lastSyncedAt
+  } = useWorkspaceStore();
 
   useEffect(() => {
     // Check active sessions and sets the user
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      
+      // Auto-sync workspace when user logs in
+      if (currentUser) {
+        syncWorkspaceStore(currentUser.id).catch(console.error);
+      }
+      
       setLoading(false);
     });
 
     // Listen for changes on auth state (logged in, signed out, etc.)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setUser(session?.user ?? null);
+      const currentUser = session?.user ?? null;
+      setUser(currentUser);
+      
+      // Auto-sync workspace when user logs in
+      if (event === 'SIGNED_IN' && currentUser) {
+        syncWorkspaceStore(currentUser.id).catch(console.error);
+      }
+      
       setLoading(false);
     });
 
     return () => subscription.unsubscribe();
-  }, []);
+  }, [syncWorkspaceStore]);
 
   const signIn = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -54,6 +82,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
+    // Save workspace to cloud before signing out
+    if (user) {
+      try {
+        setIsSyncing(true);
+        await saveWorkspaceToCloud(user.id);
+      } catch (error) {
+        console.error('Error saving workspace before sign out:', error);
+      } finally {
+        setIsSyncing(false);
+      }
+    }
+    
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
   };
@@ -65,8 +105,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) throw error;
   };
 
+  const syncWorkspace = async () => {
+    if (!user) return;
+    
+    setIsSyncing(true);
+    try {
+      await syncWorkspaceStore(user.id);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  // Set up periodic syncing if user is logged in
+  useEffect(() => {
+    if (!user) return;
+    
+    const syncInterval = setInterval(() => {
+      syncWorkspaceStore(user.id).catch(console.error);
+    }, 5 * 60 * 1000); // Sync every 5 minutes
+    
+    return () => clearInterval(syncInterval);
+  }, [user, syncWorkspaceStore]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      loading, 
+      signIn, 
+      signUp, 
+      signOut, 
+      resetPassword,
+      syncWorkspace,
+      isSyncing: isSyncing || isStoreSyncing,
+      isWorkspaceSynced: isCloudSaved,
+      lastSyncedAt
+    }}>
       {children}
     </AuthContext.Provider>
   );
